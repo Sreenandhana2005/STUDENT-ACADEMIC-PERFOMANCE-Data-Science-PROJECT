@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Student Churn Predictor</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            padding-top: 70px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .churn-card {
+            background: white;
+            border-radius: 20px;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            padding: 30px;
+            margin-bottom: 30px;
+        }
+        .form-section {
+            background: #f8f9fa;
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-left: 5px solid #667eea;
+        }
+        .risk-meter {
+            height: 25px;
+            width: 100%;
+            background: linear-gradient(to right, #2ecc71, #f39c12, #e74c3c);
+            border-radius: 12px;
+            margin: 20px 0;
+            position: relative;
+        }
+        .risk-indicator {
+            position: absolute;
+            top: -10px;
+            width: 4px;
+            height: 45px;
+            background: #2c3e50;
+            border-radius: 2px;
+            transform: translateX(-50%);
+        }
+        .probability-bar {
+            height: 25px;
+            border-radius: 12px;
+            margin: 10px 0;
+            overflow: hidden;
+            display: flex;
+        }
+        .probability-bar .dropout { background: #e74c3c; }
+        .probability-bar .enrolled { background: #3498db; }
+        .probability-bar .graduate { background: #2ecc71; }
+        .prediction-result {
+            border-radius: 15px;
+            padding: 20px;
+            margin: 20px 0;
+            border: 3px solid;
+        }
+        .prediction-result.dropout { 
+            border-color: #e74c3c; 
+            background: linear-gradient(135deg, #ffeaea 0%, #ffcccc 100%);
+        }
+        .prediction-result.graduate { 
+            border-color: #2ecc71; 
+            background: linear-gradient(135deg, #e8f5e9 0%, #d4edda 100%);
+        }
+        .prediction-result.enrolled { 
+            border-color: #3498db; 
+            background: linear-gradient(135deg, #e6f2ff 0%, #cce5ff 100%);
+        }
+        .nav-custom {
+            background: linear-gradient(90deg, #2c3e50 0%, #1a252f 100%) !important;
+            box-shadow: 0 4px 20px rgba(0,0,0,0.2);
+        }
+        .btn-predict {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            padding: 15px 40px;
+            font-size: 1.2rem;
+            font-weight: 600;
+            transition: all 0.3s ease;
+        }
+        .btn-predict:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(102, 126, 234, 0.4);
+        }
+        .profile-btn {
+            border: 2px solid;
+            border-radius: 10px;
+            padding: 10px;
+            margin-bottom: 10px;
+            transition: all 0.3s ease;
+        }
+        .profile-btn:hover {
+            transform: translateY(-3px);
+        }
+        .alert-floating {
+            position: fixed;
+            top: 80px;
+            right: 20px;
+            z-index: 9999;
+            max-width: 400px;
+            box-shadow: 0 5px 20px rgba(0,0,0,0.2);
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark fixed-top nav-custom">
+        <div class="container">
+            <a class="navbar-brand" href="/">
+                <i class="fas fa-graduation-cap me-2"></i>Student Churn Predictor
+            </a>
+            <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav">
+                <span class="navbar-toggler-icon"></span>
+            </button>
+            <div class="collapse navbar-collapse" id="navbarNav">
+                <div class="navbar-nav ms-auto">
+                    <a class="nav-link" href="/"><i class="fas fa-home me-1"></i> Dashboard</a>
+                    <a class="nav-link active" href="/predict_churn"><i class="fas fa-user-graduate me-1"></i> Predict Churn</a>
+                    <a class="nav-link" href="/batch_predict"><i class="fas fa-users me-1"></i> Batch Predict</a>
+                    <a class="nav-link" href="/predict"><i class="fas fa-chart-line me-1"></i> Model Analysis</a>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="container py-4">
+        <div class="row">
+            <!-- Left Column: Input Form -->
+            <div class="col-lg-8">
+                <div class="churn-card">
+                    <h1 class="mb-4"><i class="fas fa-brain me-2 text-primary"></i>Student Churn Predictor</h1>
+                    <p class="lead mb-4">Enter student details to predict dropout risk and academic outcomes in real-time.</p>
+                    
+                    <form id="predictionForm">
+                        <div class="row">
+                            <!-- Personal Information -->
+                            <div class="col-md-6">
+                                <div class="form-section">
+                                    <h4><i class="fas fa-user me-2 text-primary"></i>Personal Information</h4>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Age at Enrollment</label>
+                                        <input type="number" class="form-control form-control-lg" name="age" min="15" max="60" value="20" required>
+                                        <div class="form-text">Typical range: 18-25 years</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Course Code</label>
+                                        <input type="number" class="form-control form-control-lg" name="course" min="1000" max="9999" value="9000" required>
+                                        <div class="form-text">Example: 9000 (Engineering), 8000 (Business)</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Financial Status -->
+                                <div class="form-section">
+                                    <h4><i class="fas fa-money-bill-wave me-2 text-success"></i>Financial Status</h4>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Tuition Fees Up to Date?</label>
+                                        <select class="form-select form-select-lg" name="tuition_paid" required>
+                                            <option value="1">✅ Yes, all fees are paid</option>
+                                            <option value="0">❌ No, fees are pending</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Scholarship Holder?</label>
+                                        <select class="form-select form-select-lg" name="scholarship" required>
+                                            <option value="0">❌ No scholarship</option>
+                                            <option value="1">✅ Yes, has scholarship</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Has Outstanding Debt?</label>
+                                        <select class="form-select form-select-lg" name="debtor" required>
+                                            <option value="0">❌ No debt</option>
+                                            <option value="1">✅ Yes, has debt</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Academic Performance -->
+                            <div class="col-md-6">
+                                <div class="form-section">
+                                    <h4><i class="fas fa-chart-line me-2 text-info"></i>Academic Performance</h4>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Admission Grade (0-200)</label>
+                                        <input type="number" class="form-control form-control-lg" name="admission_grade" min="0" max="200" value="150" required>
+                                        <div class="form-text">Entrance exam score</div>
+                                    </div>
+                                    
+                                    <div class="mb-3">
+                                        <label class="form-label fw-bold">Previous Qualification Grade (0-200)</label>
+                                        <input type="number" class="form-control form-control-lg" name="previous_grade" min="0" max="200" value="140" required>
+                                        <div class="form-text">High school or previous course grade</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Academic Progress -->
+                                <div class="form-section">
+                                    <h4><i class="fas fa-tasks me-2 text-warning"></i>Academic Progress</h4>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">1st Sem Approved Units</label>
+                                            <input type="number" class="form-control" name="sem1_approved" min="0" max="10" value="5" required>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">1st Sem Avg Grade</label>
+                                            <input type="number" class="form-control" name="sem1_grade" min="0" max="20" value="12" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">2nd Sem Approved Units</label>
+                                            <input type="number" class="form-control" name="sem2_approved" min="0" max="10" value="4" required>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">2nd Sem Avg Grade</label>
+                                            <input type="number" class="form-control" name="sem2_grade" min="0" max="20" value="11" required>
+                                        </div>
+                                    </div>
+                                    
+                                    <div class="row">
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">1st Sem Enrolled Units</label>
+                                            <input type="number" class="form-control" name="sem1_enrolled" min="0" max="10" value="6" required>
+                                        </div>
+                                        <div class="col-md-6 mb-3">
+                                            <label class="form-label fw-bold">2nd Sem Enrolled Units</label>
+                                            <input type="number" class="form-control" name="sem2_enrolled" min="0" max="10" value="5" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Action Buttons -->
+                        <div class="text-center mt-4">
+                            <button type="submit" class="btn btn-predict text-white">
+                                <i class="fas fa-bolt me-2"></i>Predict Churn Risk Now
+                            </button>
+                            <button type="reset" class="btn btn-outline-secondary btn-lg ms-3">
+                                <i class="fas fa-redo me-2"></i>Reset Form
+                            </button>
+                        </div>
+                    </form>
+                </div>
+                
+                <!-- Sample Profiles -->
+                <div class="churn-card mt-4">
+                    <h4><i class="fas fa-vial me-2 text-primary"></i>Quick Test Profiles</h4>
+                    <p class="text-muted mb-3">Click to load sample student profiles for testing:</p>
+                    <div class="row">
+                        <div class="col-md-4">
+                            <button class="btn btn-outline-danger w-100 profile-btn" data-profile="high_risk">
+                                <i class="fas fa-exclamation-triangle me-2"></i>High Risk
+                            </button>
+                            <small class="text-muted d-block mt-1">Low grades, unpaid fees</small>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-outline-warning w-100 profile-btn" data-profile="medium_risk">
+                                <i class="fas fa-user me-2"></i>Medium Risk
+                            </button>
+                            <small class="text-muted d-block mt-1">Average performance</small>
+                        </div>
+                        <div class="col-md-4">
+                            <button class="btn btn-outline-success w-100 profile-btn" data-profile="low_risk">
+                                <i class="fas fa-user-graduate me-2"></i>Low Risk
+                            </button>
+                            <small class="text-muted d-block mt-1">Excellent student</small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Right Column: Results -->
+            <div class="col-lg-4">
+                <!-- Placeholder Panel -->
+                <div class="churn-card" id="placeholderPanel">
+                    <div class="text-center py-4">
+                        <div class="mb-4">
+                            <i class="fas fa-user-graduate fa-4x text-primary mb-3"></i>
+                            <h3>Ready to Predict!</h3>
+                        </div>
+                        <p class="lead">Enter student details on the left and click <strong>"Predict Churn Risk"</strong> to:</p>
+                        <ul class="text-start">
+                            <li>Predict student outcome (Graduate/Dropout/Enrolled)</li>
+                            <li>Get churn risk score (0-100%)</li>
+                            <li>See probability breakdown</li>
+                            <li>Receive personalized recommendations</li>
+                        </ul>
+                        <div class="alert alert-info mt-4">
+                            <i class="fas fa-lightbulb me-2"></i>
+                            <strong>Pro Tip:</strong> Students with low grades (< 10) and unpaid tuition have 3x higher dropout risk.
+                        </div>
+                    </div>
+                </div>
+                
+                <!-- Results Panel (Hidden initially) -->
+                <div class="churn-card" id="resultsPanel" style="display: none;">
+                    <!-- Prediction Result -->
+                    <div id="predictionResult"></div>
+                    
+                    <!-- Probability Chart -->
+                    <div class="mt-4">
+                        <h5><i class="fas fa-chart-pie me-2 text-info"></i>Probability Breakdown</h5>
+                        <div id="probabilityChart" class="mb-3"></div>
+                    </div>
+                    
+                    <!-- Churn Risk Meter -->
+                    <div class="mt-4">
+                        <h5><i class="fas fa-exclamation-triangle me-2 text-warning"></i>Churn Risk Assessment</h5>
+                        <div class="risk-meter">
+                            <div class="risk-indicator" id="riskIndicator"></div>
+                        </div>
+                        <div class="row text-center small fw-bold">
+                            <div class="col-4">
+                                <span class="text-success">Low<br>(0-30%)</span>
+                            </div>
+                            <div class="col-4">
+                                <span class="text-warning">Medium<br>(31-70%)</span>
+                            </div>
+                            <div class="col-4">
+                                <span class="text-danger">High<br>(71-100%)</span>
+                            </div>
+                        </div>
+                        <div class="text-center mt-3">
+                            <div class="display-2 fw-bold" id="riskScore">0%</div>
+                            <div class="h5" id="riskLevel">Churn Risk Score</div>
+                        </div>
+                    </div>
+                    
+                    <!-- Recommendations -->
+                    <div class="mt-4">
+                        <h5><i class="fas fa-lightbulb me-2 text-success"></i>Recommendations</h5>
+                        <div id="recommendations"></div>
+                    </div>
+                    
+                    <!-- Action Buttons -->
+                    <div class="text-center mt-4">
+                        <button onclick="window.location.reload()" class="btn btn-outline-primary">
+                            <i class="fas fa-redo me-2"></i>New Prediction
+                        </button>
+                        <a href="/batch_predict" class="btn btn-outline-success ms-2">
+                            <i class="fas fa-users me-2"></i>Batch Predict
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- JavaScript -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Sample profiles data
+        const profiles = {
+            high_risk: {
+                age: 22,
+                course: 9000,
+                admission_grade: 120,
+                previous_grade: 110,
+                tuition_paid: 0,
+                scholarship: 0,
+                debtor: 1,
+                sem1_approved: 2,
+                sem1_grade: 8,
+                sem2_approved: 1,
+                sem2_grade: 7,
+                sem1_enrolled: 6,
+                sem2_enrolled: 6
+            },
+            medium_risk: {
+                age: 20,
+                course: 8000,
+                admission_grade: 150,
+                previous_grade: 140,
+                tuition_paid: 1,
+                scholarship: 0,
+                debtor: 0,
+                sem1_approved: 4,
+                sem1_grade: 12,
+                sem2_approved: 3,
+                sem2_grade: 11,
+                sem1_enrolled: 6,
+                sem2_enrolled: 6
+            },
+            low_risk: {
+                age: 19,
+                course: 9000,
+                admission_grade: 180,
+                previous_grade: 175,
+                tuition_paid: 1,
+                scholarship: 1,
+                debtor: 0,
+                sem1_approved: 8,
+                sem1_grade: 16,
+                sem2_approved: 7,
+                sem2_grade: 15,
+                sem1_enrolled: 8,
+                sem2_enrolled: 8
+            }
+        };
+        
+        // Load profile when clicked
+        $('.profile-btn').click(function() {
+            const profile = $(this).data('profile');
+            const data = profiles[profile];
+            
+            // Fill form with profile data
+            for (const [key, value] of Object.entries(data)) {
+                $(`[name="${key}"]`).val(value);
+            }
+            
+            showAlert(`✅ ${profile.replace('_', ' ').toUpperCase()} profile loaded!`, 'success');
+        });
+        
+        // Form submission
+        $('#predictionForm').submit(function(e) {
+            e.preventDefault();
+            
+            // Show loading state
+            const submitBtn = $(this).find('button[type="submit"]');
+            const originalText = submitBtn.html();
+            submitBtn.html('<i class="fas fa-spinner fa-spin me-2"></i>Analyzing...');
+            submitBtn.prop('disabled', true);
+            
+            // Collect form data
+            const formData = $(this).serialize();
+            
+            // Send prediction request
+            $.post('/predict_api', formData)
+                .done(function(response) {
+                    if (response.error) {
+                        showAlert('❌ Error: ' + response.error, 'danger');
+                        return;
+                    }
+                    
+                    // Hide placeholder, show results
+                    $('#placeholderPanel').hide();
+                    $('#resultsPanel').show();
+                    
+                    // Update prediction result
+                    const prediction = response.prediction;
+                    const predictionClass = prediction.toLowerCase();
+                    let icon, color, message;
+                    
+                    if (prediction === 'Dropout') {
+                        icon = 'exclamation-triangle';
+                        color = 'danger';
+                        message = `<strong>High Risk of Dropout Detected!</strong><br>
+                                  This student has a ${response.probabilities.Dropout}% probability of dropping out.`;
+                    } else if (prediction === 'Enrolled') {
+                        icon = 'user-clock';
+                        color = 'info';
+                        message = `<strong>Likely to Remain Enrolled</strong><br>
+                                  The student will probably continue studies.`;
+                    } else {
+                        icon = 'user-graduate';
+                        color = 'success';
+                        message = `<strong>High Chance of Graduation!</strong><br>
+                                  This student has a ${response.probabilities.Graduate}% probability of graduating.`;
+                    }
+                    
+                    $('#predictionResult').html(`
+                        <div class="prediction-result ${predictionClass}">
+                            <div class="d-flex align-items-center mb-2">
+                                <i class="fas fa-${icon} fa-2x me-3 text-${color}"></i>
+                                <div>
+                                    <h3 class="mb-0">Prediction: ${prediction}</h3>
+                                    <small class="text-muted">Confidence: ${response.confidence}%</small>
+                                </div>
+                            </div>
+                            <p class="mb-0">${message}</p>
+                        </div>
+                    `);
+                    
+                    // Update probability chart
+                    $('#probabilityChart').html(`
+                        <div class="probability-bar">
+                            <div class="dropout" style="width: ${response.probabilities.Dropout}%" 
+                                 title="Dropout: ${response.probabilities.Dropout}%"></div>
+                            <div class="enrolled" style="width: ${response.probabilities.Enrolled}%"
+                                 title="Enrolled: ${response.probabilities.Enrolled}%"></div>
+                            <div class="graduate" style="width: ${response.probabilities.Graduate}%"
+                                 title="Graduate: ${response.probabilities.Graduate}%"></div>
+                        </div>
+                        <div class="row text-center mt-2">
+                            <div class="col-4">
+                                <i class="fas fa-exclamation-triangle text-danger"></i><br>
+                                <strong>${response.probabilities.Dropout}%</strong><br>
+                                <small>Dropout</small>
+                            </div>
+                            <div class="col-4">
+                                <i class="fas fa-user-clock text-info"></i><br>
+                                <strong>${response.probabilities.Enrolled}%</strong><br>
+                                <small>Enrolled</small>
+                            </div>
+                            <div class="col-4">
+                                <i class="fas fa-user-graduate text-success"></i><br>
+                                <strong>${response.probabilities.Graduate}%</strong><br>
+                                <small>Graduate</small>
+                            </div>
+                        </div>
+                    `);
+                    
+                    // Update risk score
+                    const churnRisk = response.churn_risk;
+                    $('#riskScore').text(churnRisk + '%');
+                    $('#riskIndicator').css('left', churnRisk + '%');
+                    
+                    // Set risk level
+                    let riskLevel, riskClass;
+                    if (churnRisk < 30) {
+                        riskLevel = 'Low Risk';
+                        riskClass = 'text-success';
+                    } else if (churnRisk < 70) {
+                        riskLevel = 'Medium Risk';
+                        riskClass = 'text-warning';
+                    } else {
+                        riskLevel = 'High Risk';
+                        riskClass = 'text-danger';
+                    }
+                    
+                    $('#riskLevel').html(`<span class="${riskClass} fw-bold">${riskLevel}</span>`);
+                    
+                    // Generate recommendations
+                    let recommendations = '';
+                    if (churnRisk > 70) {
+                        recommendations = `
+                            <div class="alert alert-danger">
+                                <h6><i class="fas fa-exclamation-circle me-2"></i>Immediate Intervention Required</h6>
+                                <ul class="mb-0">
+                                    <li>Schedule urgent academic counseling</li>
+                                    <li>Review financial aid eligibility</li>
+                                    <li>Assign dedicated student mentor</li>
+                                    <li>Create academic recovery plan</li>
+                                    <li>Weekly progress monitoring</li>
+                                </ul>
+                            </div>
+                        `;
+                    } else if (churnRisk > 30) {
+                        recommendations = `
+                            <div class="alert alert-warning">
+                                <h6><i class="fas fa-eye me-2"></i>Close Monitoring Recommended</h6>
+                                <ul class="mb-0">
+                                    <li>Monthly academic reviews</li>
+                                    <li>Targeted tutoring sessions</li>
+                                    <li>Regular financial check-ins</li>
+                                    <li>Study group participation</li>
+                                    <li>Time management workshop</li>
+                                </ul>
+                            </div>
+                        `;
+                    } else {
+                        recommendations = `
+                            <div class="alert alert-success">
+                                <h6><i class="fas fa-check-circle me-2"></i>Student is Performing Well</h6>
+                                <ul class="mb-0">
+                                    <li>Continue regular monitoring</li>
+                                    <li>Encourage leadership roles</li>
+                                    <li>Offer advanced courses</li>
+                                    <li>Research opportunities</li>
+                                    <li>Career counseling sessions</li>
+                                </ul>
+                            </div>
+                        `;
+                    }
+                    
+                    $('#recommendations').html(recommendations);
+                    
+                    // Show success message
+                    showAlert('✅ Prediction completed successfully!', 'success');
+                })
+                .fail(function() {
+                    showAlert('❌ Server error. Please try again.', 'danger');
+                })
+                .always(function() {
+                    // Restore button
+                    submitBtn.html(originalText);
+                    submitBtn.prop('disabled', false);
+                });
+        });
+        
+        // Show alert function
+        function showAlert(message, type) {
+            const alert = $(`
+                <div class="alert alert-${type} alert-dismissible fade show alert-floating" role="alert">
+                    ${message}
+                    <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+                </div>
+            `);
+            
+            $('body').append(alert);
+            
+            // Auto remove after 5 seconds
+            setTimeout(() => {
+                alert.alert('close');
+            }, 5000);
+        }
+        
+        // Reset form button
+        $('button[type="reset"]').click(function() {
+            $('#resultsPanel').hide();
+            $('#placeholderPanel').show();
+            showAlert('Form reset to default values', 'info');
+        });
+    </script>
+</body>
+</html>
